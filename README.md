@@ -58,7 +58,8 @@ Install Renode from [renode.io](https://renode.io/) or with
 `brew install renode`. It is an application, not a Python package.
 
 Clone both repositories side by side. This one uses microfreak-tools from the
-sibling checkout until that is on PyPI, so `uv sync` fails without it.
+sibling checkout, so its tests run against that code, and `uv sync` fails
+without it.
 
     git clone https://github.com/gbryant/microfreak-tools
     git clone https://github.com/gbryant/microfreak-emu

@@ -1,6 +1,6 @@
 [project]
 name = "microfreak-emu"
-version = "0.0.0"
+version = "0.1.0"
 description = "Renode rehosting harness and firmware documentation for the Arturia MicroFreak. Not affiliated with Arturia."
 readme = "README.md"
 license = "Apache-2.0"
@@ -35,10 +35,10 @@ hardware = ["rtmidi2>=1.5.0"]
 [project.scripts]
 mfemu = "mfemu.cli:main"
 
-# microfreak-tools is not on PyPI yet. Until it is, resolve it from a sibling
-# checkout -- so BOTH repositories must be cloned side by side, which README
-# says under "Running it". A lone clone of this repo cannot `uv sync`.
-# Delete this block once microfreak-tools publishes.
+# microfreak-tools and its plugins come from a sibling checkout, not PyPI, so
+# the tests here run against the working copy of the tool's code. BOTH
+# repositories must be cloned side by side, which README says under "Running
+# it". A lone clone of this repo cannot `uv sync`.
 [tool.uv.sources]
 microfreak-tools = { path = "../microfreak-tools", editable = true }
 mfreak-speech = { path = "../microfreak-tools/plugins/speech", editable = true }

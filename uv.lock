@@ -109,7 +109,7 @@ wheels = [
 
 [[package]]
 name = "mfreak-peek"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "../microfreak-tools/plugins/peek" }
 dependencies = [
     { name = "microfreak-tools" },
@@ -120,7 +120,7 @@ requires-dist = [{ name = "microfreak-tools", editable = "../microfreak-tools" }
 
 [[package]]
 name = "mfreak-speech"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "../microfreak-tools/plugins/speech" }
 dependencies = [
     { name = "microfreak-tools" },
@@ -136,7 +136,7 @@ requires-dist = [
 
 [[package]]
 name = "microfreak-emu"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "microfreak-tools" },
@@ -171,7 +171,7 @@ dev = [
 
 [[package]]
 name = "microfreak-tools"
-version = "0.0.0"
+version = "0.1.0"
 source = { editable = "../microfreak-tools" }
 dependencies = [
     { name = "libusb-package", marker = "platform_machine in 'x86_64 AMD64 arm64 aarch64'" },
