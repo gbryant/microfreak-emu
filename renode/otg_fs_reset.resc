@@ -1,0 +1,50 @@
+# USB OTG_FS register reset values for the memory region that stands in for
+# the core (see microfreak.repl, `usbfs`).  Generated from Renode's
+# STM32F40x.svd (dl.antmicro.com/projects/renode/svd/STM32F40x.svd.gz): every
+# non-zero resetValue of the OTG_FS_* peripherals, then the 0x80000000 that the
+# platform's former `Tag <0x50000010, 0x5000003f> "USB:RESET"` returned for
+# that window, which takes precedence over the SVD as it did before.  The
+# firmware therefore reads exactly what it read with no memory here, minus
+# the per-access cost.  Regenerate rather than edit.
+
+sysbus WriteDoubleWord 0x50000000 0x00000800    # OTG_FS_GLOBAL:FS_GOTGCTL
+sysbus WriteDoubleWord 0x5000000C 0x00000A00    # OTG_FS_GLOBAL:FS_GUSBCFG
+sysbus WriteDoubleWord 0x50000010 0x20000000    # OTG_FS_GLOBAL:FS_GRSTCTL
+sysbus WriteDoubleWord 0x50000014 0x04000020    # OTG_FS_GLOBAL:FS_GINTSTS
+sysbus WriteDoubleWord 0x50000024 0x00000200    # OTG_FS_GLOBAL:FS_GRXFSIZ
+sysbus WriteDoubleWord 0x50000028 0x00000200    # OTG_FS_GLOBAL:FS_GNPTXFSIZ_Device
+sysbus WriteDoubleWord 0x50000028 0x00000200    # OTG_FS_GLOBAL:FS_GNPTXFSIZ_Host
+sysbus WriteDoubleWord 0x5000002C 0x00080200    # OTG_FS_GLOBAL:FS_GNPTXSTS
+sysbus WriteDoubleWord 0x5000003C 0x00001000    # OTG_FS_GLOBAL:FS_CID
+sysbus WriteDoubleWord 0x50000100 0x02000600    # OTG_FS_GLOBAL:FS_HPTXFSIZ
+sysbus WriteDoubleWord 0x50000104 0x02000400    # OTG_FS_GLOBAL:FS_DIEPTXF1
+sysbus WriteDoubleWord 0x50000108 0x02000400    # OTG_FS_GLOBAL:FS_DIEPTXF2
+sysbus WriteDoubleWord 0x5000010C 0x02000400    # OTG_FS_GLOBAL:FS_DIEPTXF3
+sysbus WriteDoubleWord 0x50000404 0x0000EA60    # OTG_FS_HOST:HFIR
+sysbus WriteDoubleWord 0x50000408 0x00003FFF    # OTG_FS_HOST:FS_HFNUM
+sysbus WriteDoubleWord 0x50000410 0x00080100    # OTG_FS_HOST:FS_HPTXSTS
+sysbus WriteDoubleWord 0x50000800 0x02200000    # OTG_FS_DEVICE:FS_DCFG
+sysbus WriteDoubleWord 0x50000808 0x00000010    # OTG_FS_DEVICE:FS_DSTS
+sysbus WriteDoubleWord 0x50000828 0x000017D7    # OTG_FS_DEVICE:DVBUSDIS
+sysbus WriteDoubleWord 0x5000082C 0x000005B8    # OTG_FS_DEVICE:DVBUSPULSE
+sysbus WriteDoubleWord 0x50000908 0x00000080    # OTG_FS_DEVICE:DIEPINT0
+sysbus WriteDoubleWord 0x50000928 0x00000080    # OTG_FS_DEVICE:DIEPINT1
+sysbus WriteDoubleWord 0x50000948 0x00000080    # OTG_FS_DEVICE:DIEPINT2
+sysbus WriteDoubleWord 0x50000968 0x00000080    # OTG_FS_DEVICE:DIEPINT3
+sysbus WriteDoubleWord 0x50000B00 0x00008000    # OTG_FS_DEVICE:DOEPCTL0
+sysbus WriteDoubleWord 0x50000B08 0x00000080    # OTG_FS_DEVICE:DOEPINT0
+sysbus WriteDoubleWord 0x50000B28 0x00000080    # OTG_FS_DEVICE:DOEPINT1
+sysbus WriteDoubleWord 0x50000B48 0x00000080    # OTG_FS_DEVICE:DOEPINT2
+sysbus WriteDoubleWord 0x50000B68 0x00000080    # OTG_FS_DEVICE:DOEPINT3
+sysbus WriteDoubleWord 0x50000010 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x50000014 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x50000018 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x5000001C 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x50000020 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x50000024 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x50000028 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x5000002C 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x50000030 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x50000034 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x50000038 0x80000000    # USB:RESET tag value
+sysbus WriteDoubleWord 0x5000003C 0x80000000    # USB:RESET tag value

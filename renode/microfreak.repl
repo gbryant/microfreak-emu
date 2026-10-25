@@ -1,0 +1,430 @@
+// MicroFreak main board: an STM32F446-class Cortex-M4.
+//
+// This is Renode's stock stm32f4.repl inlined and modified, rather than a
+// `using` of it.  A repl cannot redeclare a peripheral with a different type,
+// and the DMA model has to be replaced wholesale -- see below -- so inheriting
+// and patching is not an option.  Diff against
+// platforms/cpus/stm32f4.repl in the Renode tree to see what changed:
+//
+//   * dma1/dma2 use DMA.STM32F4DMA instead of DMA.STM32DMA.  Renode's stock
+//     model implements neither circular mode nor the half-transfer interrupt,
+//     and both are how an audio DMA runs -- it moved one buffer and stopped,
+//     giving 128 samples of silence and nothing after.  See NOTES.md for the
+//     provenance of the replacement.
+//   * quadspi, codec and sai2 are added at the end.
+//   * the NVIC's systick frequency and the CPU's MIPS are set to 180 MHz.
+//
+// The firmware does NOT load at 0x08000000.  It sits at 0x0800C000 -- on
+// hardware a bootloader occupies the first 48 KB and sets VTOR -- so the vector
+// table offset has to be set explicitly.  See boot.resc.
+
+fsmcBank1: Memory.MappedMemory @ sysbus 0x60000000
+    size: 0x10000000
+
+sram: Memory.MappedMemory @ sysbus 0x20000000
+    size: 0x00040000
+
+flash: Memory.MappedMemory @ sysbus 0x08000000
+    size: 0x200000
+
+// The boot alias.  On an STM32F446 with BOOT0 selecting main flash, 0x00000000
+// IS flash, and that matters after a SYSRESETREQ: the Cortex-M fetches its
+// initial SP and PC from the vector table at the RESET value of VTOR, which is
+// 0.  With nothing mapped there the fetch fails and the core locks at PC
+// 0xEFFFFFFE -- which is what the firmware update's reset-into-the-bootloader
+// did, and it read as the bootloader crashing.
+//
+// A SEPARATE region rather than registering `flash` at both addresses.
+// Registering it twice also works for the CPU, but it gives
+// flash_controller's `flash:` reference two registration points, and with
+// that in place the application's own erase-and-program of the factory data
+// page stopped happening -- the update's marker write silently did nothing.
+// One registration for the controller, a plain copy for the boot fetch.
+//
+// Nothing writes here, so the copy never goes stale: the bootloader's reset
+// vector is an absolute 0x0800xxxx address, so the core takes two words from
+// this region and spends the rest of its life in flash proper.
+bootalias: Memory.MappedMemory @ sysbus 0x00000000
+    size: 0x10000
+
+// OURS, not Renode's MTD.STM32F4_FlashController.  The stock model handles
+// the unlock sequence and then refuses every program, because FLASH_CR.PG is
+// unimplemented -- measured, with a watchpoint: the firmware writes the right
+// word and the memory never changes.  See STM32F4_Flash.cs.
+flash_controller: MTD.STM32F4_Flash @ sysbus 0x40023C00
+    flash: flash
+
+usart1: UART.STM32_UART @ sysbus <0x40011000, +0x100>
+    -> nvic@37
+
+usart2: UART.STM32_UART @ sysbus <0x40004400, +0x100>
+    -> nvic@38
+
+usart3: UART.STM32_UART @ sysbus <0x40004800, +0x100>
+    -> nvic@39
+
+uart4: UART.STM32_UART @ sysbus <0x40004C00, +0x100>
+    -> nvic@52
+
+uart5: UART.STM32_UART @ sysbus <0x40005000, +0x100>
+    -> nvic@53
+
+can1: CAN.STMCAN @ sysbus <0x40006400, +0x400>
+    [0-3] -> nvic@[19-22]
+
+can2: CAN.STMCAN @ sysbus <0x40006800, +0x400>
+    [0-3] -> nvic@[63-66]
+    master: can1
+
+nvic: IRQControllers.NVIC @ sysbus 0xE000E000
+    priorityMask: 0xF0
+    systickFrequency: 72000000
+    IRQ -> cpu@0
+
+cpu: CPU.CortexM @ sysbus
+    cpuType: "cortex-m4"
+    nvic: nvic
+
+pwr: Miscellaneous.STM32_PWR @ sysbus 0x40007000
+
+crc: CRC.STM32_CRC @ sysbus 0x40023000
+    series: STM32Series.F4
+
+exti: IRQControllers.STM32F4_EXTI @ sysbus 0x40013C00
+    numberOfOutputLines: 24
+    [0-4] -> nvic@[6-10]
+    [5-9] -> nvicInput23@[0-4]
+    [10-15] -> nvicInput40@[0-5]
+    [16, 17, 18, 22] -> nvic@[1, 41, 42, 3]
+
+nvicInput23: Miscellaneous.CombinedInput @ none
+    numberOfInputs: 5
+    -> nvic@23
+
+nvicInput40: Miscellaneous.CombinedInput @ none
+    numberOfInputs: 6
+    -> nvic@40
+
+gpioPortA: GPIOPort.STM32_GPIOPort @ sysbus <0x40020000, +0x400>
+    modeResetValue: 0xA8000000
+    outputSpeedResetValue: 0x0C000000
+    pullUpPullDownResetValue: 0x64000000
+    numberOfAFs: 16
+    invertedAFPins: [[5, 3], [7, 1, 3]]
+    [0-15] -> exti@[0-15]
+
+gpioPortB: GPIOPort.STM32_GPIOPort @ sysbus <0x40020400, +0x400>
+    modeResetValue: 0x00000280
+    outputSpeedResetValue: 0x000000C0
+    pullUpPullDownResetValue: 0x00000100
+    numberOfAFs: 16
+    invertedAFPins: [[0, 1, 3], [1, 1, 3], [13, 1], [14, 1, 3], [15, 1, 3]]
+    [0-15] -> exti@[0-15]
+
+gpioPortC: GPIOPort.STM32_GPIOPort @ sysbus <0x40020800, +0x400>
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortD: GPIOPort.STM32_GPIOPort @ sysbus <0x40020C00, +0x400>
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortE: GPIOPort.STM32_GPIOPort @ sysbus <0x40021000, +0x400>
+    numberOfAFs: 16
+    invertedAFPins: [[8, 1], [10, 1], [12, 1]]
+    [0-15] -> exti@[0-15]
+
+gpioPortF: GPIOPort.STM32_GPIOPort @ sysbus <0x40021400, +0x400>
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortG: GPIOPort.STM32_GPIOPort @ sysbus <0x40021800, +0x400>
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortH: GPIOPort.STM32_GPIOPort @ sysbus <0x40021c00, +0x400>
+    numberOfAFs: 16
+    invertedAFPins: [[13, 3], [14, 3], [15, 3]]
+    [0-15] -> exti@[0-15]
+
+gpioPortI: GPIOPort.STM32_GPIOPort @ sysbus <0x40022000, +0x400>
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortJ: GPIOPort.STM32_GPIOPort @ sysbus <0x40022400, +0x400>
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+gpioPortK: GPIOPort.STM32_GPIOPort @ sysbus <0x40022800, +0x400>
+    numberOfAFs: 16
+    [0-15] -> exti@[0-15]
+
+ethernet: Network.SynopsysEthernetMAC @ sysbus 0x40028000
+    -> nvic@61
+
+rom1: Memory.MappedMemory @ sysbus 0x1FFF0000
+    size: 0xC000
+
+rom2: Memory.MappedMemory @ sysbus 0x1FFFC400
+    size: 0x3C00
+
+spi1: SPI.STM32SPI @ sysbus 0x40013000
+    series: STM32Series.F4
+
+spi2: SPI.STM32SPI @ sysbus 0x40003800
+    series: STM32Series.F4
+    IRQ->nvic@35
+    DMAReceive->dma1@3
+
+spi3: SPI.STM32SPI @ sysbus 0x40003C00
+    series: STM32Series.F4
+
+i2c1: I2C.STM32F1_I2C @ sysbus 0x40005400
+    EventInterrupt -> nvic@31
+    ErrorInterrupt -> nvic@32
+
+i2c2: I2C.STM32F1_I2C @ sysbus 0x40005800
+    EventInterrupt -> nvic@33
+    ErrorInterrupt -> nvic@34
+
+i2c3: I2C.STM32F1_I2C @ sysbus 0x40005C00
+    EventInterrupt -> nvic@72
+    ErrorInterrupt -> nvic@73
+
+dma1: DMA.STM32F4DMA @ sysbus 0x40026000
+    [0-7] -> nvic@[11-17,47]
+
+dma2: DMA.STM32F4DMA @ sysbus 0x40026400
+    [0-7] -> nvic@[56-60,68-70]
+
+rng: Miscellaneous.STM32_RNG @ sysbus 0x50060800
+    series: STM32Series.F4
+    -> nvic@80
+
+iwdg: Timers.STM32_IndependentWatchdog @ sysbus 0x40003000
+    frequency: 32000
+    windowOption: false
+    defaultPrescaler: 0x4
+
+rtc: Timers.STM32F4_RTC @ sysbus 0x40002800
+    AlarmIRQ -> nvic@41
+
+rcc: Miscellaneous.STM32F4_RCC @ sysbus 0x40023800
+    rtcPeripheral: rtc
+    Timer9Reset -> timer9@255
+
+// --- MicroFreak: timers that only drive unconnected PWM pins ------------
+//
+// TIM3 (four channels, ~7.8 kHz), TIM9 (one channel, period 0x55 at
+// prescaler 0) and TIM14 (one channel, ~1.2 kHz) are started by the firmware
+// as PWM generators with no interrupt, no DMA and no read-back -- measured:
+// read-watchpoints on their SR, CNT, DIER, CCR1 and ARR over a full 17 s
+// render recorded zero reads.  Their outputs go to pins nothing here models.
+// But Renode charges 100-200 us of wall per time-source event on this Mono
+// build, and at the stock 10 MHz timer clock TIM9 alone raises 116,000
+// update events per second; it was 85% of all events and the reason a run
+// slowed 24x the moment the firmware started it (0.42 s into boot).  Their
+// register values, the firmware's writes, and the audio are unchanged with
+// the clock at 1 kHz: the note 60 render is byte-identical (SHA1
+// 82fb2e505745) and the run is ~12x faster.  Set them back to 10000000 if a
+// firmware read of these timers ever appears.
+
+timer1: Timers.STM32_Timer @ sysbus 0x40010000
+    BreakInterrupt -> nvic@24
+    UpdateInterrupt -> nvic@25
+    [TriggerInterrupt, CommutationInterrupt] -> nvic@[26, 26]
+    CaptureCompareInterrupt -> nvic@27
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer2: Timers.STM32_Timer @ sysbus 0x40000000
+    -> nvic@28
+    frequency: 10000000
+    initialLimit: 0xFFFFFFFF
+
+timer3: Timers.STM32_Timer @ sysbus 0x40000400
+    -> nvic@29
+    frequency: 1000
+    initialLimit: 0xFFFF
+
+timer4: Timers.STM32_Timer @ sysbus 0x40000800
+    -> nvic@30
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer5: Timers.STM32_Timer @ sysbus 0x40000C00
+    -> nvic@50
+    frequency: 10000000
+    initialLimit: 0xFFFFFFFF
+
+timer6: Timers.STM32_Timer @ sysbus 0x40001000
+    -> nvic@54
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer7: Timers.STM32_Timer @ sysbus 0x40001400
+    -> nvic@55
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer8: Timers.STM32_Timer @ sysbus 0x40010400
+    BreakInterrupt -> nvic@43
+    UpdateInterrupt -> nvic@44
+    [TriggerInterrupt, CommutationInterrupt] -> nvic@[45, 45]
+    CaptureCompareInterrupt -> nvic@46
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer9: Timers.STM32_Timer @ sysbus 0x40014000
+    -> nvic@24
+    frequency: 1000
+    initialLimit: 0xFFFF
+
+timer10: Timers.STM32_Timer @ sysbus 0x40014400
+    -> nvic@25
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer11: Timers.STM32_Timer @ sysbus 0x40014800
+    -> nvic@26
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer12: Timers.STM32_Timer @ sysbus 0x40001800
+    -> nvic@43
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer13: Timers.STM32_Timer @ sysbus 0x40001C00
+    -> nvic@44
+    frequency: 10000000
+    initialLimit: 0xFFFF
+
+timer14: Timers.STM32_Timer @ sysbus 0x40002000
+    -> nvic@45
+    frequency: 1000
+    initialLimit: 0xFFFF
+
+// Alternate function mapping connections. For more details see `stm32l071.repl`.
+timer1:
+    0 -> gpioPortA#08@01 | gpioPortE#09@01 | gpioPortA#07@01 | gpioPortB#13@01 | gpioPortE#08@01
+    1 -> gpioPortA#09@01 | gpioPortE#11@01 | gpioPortB#00@01 | gpioPortB#14@01 | gpioPortE#10@01
+    2 -> gpioPortA#10@01 | gpioPortE#13@01 | gpioPortB#01@01 | gpioPortB#15@01 | gpioPortE#12@01
+    3 -> gpioPortA#11@01 | gpioPortE#14@01
+
+timer2:
+    0 -> gpioPortA#00@01 | gpioPortA#05@01 | gpioPortA#15@01
+    1 -> gpioPortA#01@01 | gpioPortB#03@01
+    2 -> gpioPortA#02@01 | gpioPortB#10@01
+    3 -> gpioPortA#03@01 | gpioPortB#11@01
+
+timer3:
+    0 -> gpioPortA#06@02 | gpioPortB#04@02 | gpioPortC#06@02
+    1 -> gpioPortA#07@02 | gpioPortB#05@02 | gpioPortC#07@02
+    2 -> gpioPortB#00@02 | gpioPortC#08@02
+    3 -> gpioPortB#01@02 | gpioPortC#09@02
+
+timer4:
+    0 -> gpioPortB#06@02 | gpioPortD#12@02
+    1 -> gpioPortB#07@02 | gpioPortD#13@02
+    2 -> gpioPortB#08@02 | gpioPortD#14@02
+    3 -> gpioPortB#09@02 | gpioPortD#15@02
+
+timer5:
+    0 -> gpioPortA#00@02 | gpioPortH#10@02
+    1 -> gpioPortA#01@02 | gpioPortH#11@02
+    2 -> gpioPortA#02@02 | gpioPortH#12@02
+    3 -> gpioPortA#03@02 | gpioPortI#00@02
+
+timer8:
+    0 -> gpioPortC#06@03 | gpioPortI#05@03 | gpioPortA#05@03 | gpioPortA#07@03 | gpioPortH#13@3
+    1 -> gpioPortC#07@03 | gpioPortI#06@03 | gpioPortB#00@03 | gpioPortB#14@03 | gpioPortH#14@3
+    2 -> gpioPortC#08@03 | gpioPortI#07@03 | gpioPortB#01@03 | gpioPortB#15@03 | gpioPortH#15@3
+    3 -> gpioPortC#09@03 | gpioPortI#02@03
+
+timer9:
+    0 -> gpioPortA#02@03 | gpioPortE#05@03
+    1 -> gpioPortA#03@03 | gpioPortE#06@03
+
+timer10:
+    0 -> gpioPortB#08@03 | gpioPortF#06@03
+
+timer11:
+    0 -> gpioPortB#09@03 | gpioPortF#07@03
+
+timer12:
+    0 -> gpioPortB#14@09 | gpioPortH#06@09
+    1 -> gpioPortB#15@09 | gpioPortH#09@09
+
+timer13:
+    0 -> gpioPortA#06@09 | gpioPortF#08@09
+
+timer14:
+    0 -> gpioPortA#07@09 | gpioPortF#09@09
+
+bitbandPeripherals: Miscellaneous.BitBanding @ sysbus <0x42000000, +0x2000000>
+    peripheralBase: 0x40000000
+
+bitbandSram: Miscellaneous.BitBanding @ sysbus <0x22000000, +0x200000>
+    peripheralBase: 0x20000000
+
+sysbus:
+    init:
+        ApplySVD @https://dl.antmicro.com/projects/renode/svd/STM32F40x.svd.gz
+        Tag <0x40021000, 0x40021003> "GPIOE_MODER" 0xFFFFFFFF
+        Tag <0x40021004, 0x40021007> "GPIOE_OTYPER" 0x00000008
+
+// --- MicroFreak additions ------------------------------------------------
+
+// The USB OTG_FS core is not modelled, and it must not be *absent* either.
+// The firmware's USB-MIDI transmit path (0x08047E60 and 0x0804C79C, from
+// main()'s loop) reads DIEPINT1 and DTXFSTS1 every iteration; the SVD reset
+// values describe a core whose TX FIFO is empty yet has no space, so after
+// five tries it flushes the FIFO through GRSTCTL and repeats forever --
+// ~930,000 accesses a second, each a non-existing-peripheral warning with an
+// SVD lookup and an eagerly formatted message, which was 20 of the 22 s of
+// wall per firmware second once the main loop was running.  This region
+// serves exactly the values the firmware saw before (otg_fs_reset.resc
+// writes the SVD reset values and the old "USB:RESET" tag value into it) but
+// through tlib directly, so the polls cost nothing.  Writes now stick where
+// they were dropped; nothing observes them.  A real OTG_FS model would
+// replace this if USB-MIDI (SysEx preset transfer over USB) is ever wanted.
+usbfs: USBDeprecated.STM32_OTGFS @ sysbus 0x50000000
+    IRQ -> nvic@67
+
+
+// QUADSPI is absent from Renode's STM32F4 platform.  STM32_QUADSPI.cs supplies
+// it, with a NOR flash behind it; `quadspi LoadImage @flash.img` backs it with
+// an image built by mfemu.mfrender.build_image().
+quadspi: SPI.STM32_QUADSPI @ sysbus 0xA0001000
+    IRQ -> nvic@92
+    // The F446 routes QUADSPI to DMA2 stream 7, which is the stream the
+    // firmware configures (DMA2 offset 0xB8 = stream 7 CR).
+    DmaRequest -> dma2@7
+
+// The firmware addresses an I2C1 slave at 7-bit 0x18 during boot and waits for
+// it to acknowledge, retrying forever on timeout.  It writes 96 registers and
+// reads exactly one back -- a value it wrote itself -- so a slave that stores
+// writes is sufficient and the part does not have to be identified.
+codec: I2C.MicroFreakCodec @ i2c1 0x18
+
+// SAI2, at 0x40015C00 -- not SAI1.  Established by letting the access fault:
+// the only unmapped access in a full boot was <0x40015C20, 0x40015C21>, which
+// is SAI2 block A's data register accessed 16 bits wide.  DMA2 stream 4 is
+// SAI2_A on the F446, and it is one of the two streams the Unicorn work saw
+// carrying audio interrupts.
+sai2: Sound.STM32_SAI @ sysbus 0x40015C00
+    IRQ -> nvic@91
+    DmaRequestA -> dma2@4
+
+// The F446 runs at 180 MHz, and the firmware programs SysTick with a reload of
+// 0x464F (18,000 cycles) expecting a 100 us tick -- 18000 * 10,000 per second
+// = 180 MHz.  Renode's stock STM32F4 declares 72 MHz, which makes every
+// firmware delay loop run 2.5x slow and the millisecond counter at 0x2001E1D8
+// advance at 4,000 ticks/s instead of 10,000.  Measured directly: the counter
+// gained exactly 2,000 per half second before this was set, and 5,000 after.
+nvic:
+    systickFrequency: 180000000
+
+cpu:
+    PerformanceInMips: 180

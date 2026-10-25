@@ -1,0 +1,32 @@
+# Render one MIDI note through the MicroFreak firmware and capture the SAI
+# output.  No diagnostics: every `cpu AddHook` on hot code costs ~100 us of
+# wall per hit, and a watchpoint on the audio object makes a run
+# effectively unfinishable -- keep those in experiment scripts, not here.
+#
+# Variables (override on the command line with -e, or edit here):
+#   $flash    backing image from mfemu.mfrender.build_image(); slot 0 boots
+#   $note     MIDI note number, sent as note-on velocity 100 on the DIN port
+#   $out      raw little-endian s16 stereo at 96 kHz
+#   $boot     firmware seconds before the note; main()'s loop is up at ~10 s
+#             and synthesis resumes at ~11.5 s, so 14 leaves margin
+#   $lead     seconds after the note before capture starts
+#   $length   seconds of capture
+$flash  ?= @/tmp/mf/flash.img
+$note   ?= 60
+$out    ?= @/tmp/mf/out.raw
+$boot   ?= "14"
+$lead   ?= "1"
+$length ?= "2"
+
+include $mf/boot.resc
+quadspi LoadImage $flash
+emulation RunFor $boot
+sysbus ReadByte 0x2001C7B4              # engine state: 0 = running, 1 = idle
+usart1 WriteChar 0x90
+usart1 WriteChar $note
+usart1 WriteChar 0x64
+emulation RunFor $lead
+sai2 ClearCapture
+emulation RunFor $length
+sai2 SavePCM $out
+sai2 CapturedSamples

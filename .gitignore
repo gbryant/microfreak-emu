@@ -1,0 +1,48 @@
+# ~9 GB of firmware images, renders and audio. Deliberately untracked:
+# a fresh clone has the code and the documentation, not the data.
+# `git clean -xdf` WOULD DELETE ALL OF IT. Back it up.
+# No trailing slash: `data/` matches only a real directory, so a SYMLINK
+# named `data` -- pointing at a shared data tree on another volume or in
+# a sibling checkout, which is a supported setup -- showed up as
+# untracked and `git add -A` would have committed an absolute path from
+# somebody's machine into a public repository.
+data
+# ...with one exception: the reference tune in data/midi/, which is ours --
+# Beethoven's melody, public domain, written by a script on 2026-10-20 -- and
+# is what `render --midi ode_to_joy.mid` and `mfreak play` are compared with.
+# Git cannot re-include a file under an excluded directory, so the directory
+# itself is re-included (`!data/`, a trailing slash matches only a real
+# directory, so a `data` SYMLINK stays ignored by the line above) and then
+# everything in it is excluded again except that one file. Checked both
+# ways: a real data/ tree adds only the .mid; a symlink adds nothing.
+!data/
+data/*
+!data/midi/
+data/midi/*
+!data/midi/ode_to_joy.mid
+
+# Build artifacts referenced by the long-running comparison tests.
+artifacts/
+
+# Never commit a firmware payload, a patched image or a bootloader dump.
+*.raw
+*.mff
+*.bin
+*.syx
+
+# Filter-calibration recordings and fits: audio of the instrument, and large.
+# The constants they produced live in src/mfemu/filter_model.py instead.
+*.wav
+*.pkl
+# Fitted sweeps and measurement arrays: recordings of one person's
+# instrument, re-derivable with filter_cal/. See filter_cal/README.md.
+*.npy
+
+
+__pycache__/
+*.pyc
+.DS_Store
+
+# Scratch space: anything in ignored/ stays out of git.
+ignored/
+.DS_Store

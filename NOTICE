@@ -1,0 +1,143 @@
+microfreak-emu
+Copyright 2025-2026 Greg Bryant
+
+This product includes software developed as original work by the above
+copyright holder, licensed under the Apache License, Version 2.0 (see
+LICENSE).
+
+It also includes third-party material, which is licensed separately and
+retains its own copyright. The sections below are the attributions those
+licenses require.
+
+
+================================================================================
+Mutable Instruments Plaits -- MIT
+================================================================================
+
+The MicroFreak's Speech engine is Mutable Instruments' Plaits LPC speech
+synthesiser. This was established by byte-exact comparison against
+`pichenettes/eurorack`, not by inference: the 14-byte frame struct, the
+15-entry phoneme table, the quantisation lookup tables, the 640-entry
+excitation pulse, and the word banks all match the published MIT source
+value for value. See `docs/SPEECH.md` for the evidence.
+
+Because that upstream source is MIT, the tables in this repository are
+redistributable under the terms below. They are Emilie Gillet's work, not
+Arturia's and not this project's.
+
+No Plaits-derived code is in THIS repository. The quantisation tables, the
+bitstream layout and the excitation pulse are in the sibling project
+microfreak-tools (`microfreak/lpc.py`, `plugins/speech/mfreak_speech/render.py`),
+whose own NOTICE carries this attribution for them.
+
+What is here is `docs/SPEECH.md`, which documents the correspondence:
+which Plaits structure each piece of the MicroFreak's Speech engine matches,
+and how that was established. It describes published source rather than
+reproducing it. The notice below is reproduced because that document quotes
+the structures it identifies, and because the credit is owed either way.
+
+Copyright 2016 Emilie Gillet.
+
+Author: Emilie Gillet (emilie.o.gillet@gmail.com)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+
+================================================================================
+Texas Instruments LPC10 speech data -- NOT redistributed
+================================================================================
+
+Plaits' five factory word banks are, in its own description, "LPC10-encoded
+speech data extracted from Texas Instruments ROMs". The MicroFreak's banks
+match them byte for byte.
+
+This repository does not contain that data and must not come to contain it.
+The tooling reads the banks out of a firmware image the user already owns,
+at run time, and never writes them into source or into a committed artefact.
+Keep it that way: the MIT licence covering the Plaits code around them is
+not an obvious grant for speech recorded off a TI ROM, and nothing here
+depends on redistributing it.
+
+
+================================================================================
+Renode -- MIT  (one peripheral model is derived work)
+================================================================================
+
+`renode/STM32F4DMA.cs` is a derivative work of Renode's own
+`STM32DMA.cs` (Antmicro, MIT), by way of `STM32DMA_Fixed.cs` from
+RallySmith/renode-issue-stm32f2-spi, an unmerged third-party fix attached to
+renode/renode issue #615. What this project added is the half-transfer
+interrupt (HTIF/HTIE) and half-buffer chunking for memory-to-peripheral
+circular transfers; the file's own header says which is which.
+
+Copyright (c) 2010-2023 Antmicro
+Copyright (c) 2011-2015 Realtime Embedded
+
+The MIT licence text those notices require is in `licenses/MIT.txt`.
+
+The other five models in `renode/` -- `STM32_SAI.cs`, `STM32_QUADSPI.cs`,
+`STM32_OTGFS.cs`, `STM32F4_Flash.cs` and `MicroFreakCodec.cs` -- are this
+project's own work under the Apache-2.0 licence in LICENSE. They are written
+against Renode's public peripheral interfaces, which is an API dependency and
+not derivation. Where one exists because Renode's stock model could not do
+what was needed, its header says so and names the stock model it replaces.
+
+Renode itself is not redistributed here. It is a separate installation the
+user supplies, found through `MF_RENODE`.
+================================================================================
+Arturia -- no code, no binaries, no affiliation
+================================================================================
+
+This project is not affiliated with, authorised by, endorsed by or connected
+to Arturia in any way. "Arturia" and "MicroFreak" are trademarks of their
+respective owners and are used here only to identify the hardware this
+tooling was written for.
+
+No Arturia code is included in this repository. The following are
+deliberately absent, and are gitignored rather than merely missing: stock and
+patched firmware images, extracted bootloader dumps, and the factory
+vocabulary banks. Every tool that needs one reads it at run time from a copy
+the user supplies themselves.
+
+Stated plainly rather than glossed over: parts of this documentation were
+written from recordings of the MIDI and SysEx traffic between the instrument
+and Arturia's MIDI Control Center. Because a full MCC sync reads every slot,
+those recordings contain factory preset parameter dumps as they appeared on
+the wire -- knob positions and names, not code and not audio. **The recordings
+themselves are not in this repository and nothing here needs them.** They were
+how the project bootstrapped; a few documents still cite a path under
+`captures/` when naming the evidence for a finding, and those paths are
+outside this repository by design. What is published is the conclusion, not
+the evidence.
+
+One preset IS included: `tests/fixtures/init-patch.mfpz`. It is
+the MicroFreak's blank state -- what the instrument writes when you press
+Init and Save -- read off a device the author owns, and it exists so the test
+suite can build the preset it needs instead of asking everyone to supply one.
+It is the absence of a sound design rather than one, and no factory preset,
+sample or wavetable is included.
+
+It can be regenerated from any MicroFreak rather than taken on trust: press
+Init, Save to a scratch slot, and read that slot back with microfreak-tools --
+`mfreak preset read <slot> --out tests/fixtures/init-patch.mfpz`. The test that
+uses it (`tests/test_encoder_roundtrip.py`) skips with that instruction when
+the file is absent, so deleting it costs one skipped test and nothing else.
+
+Documentation in this repository describes observed behaviour and gives
+addresses within a firmware image. It does not reproduce the image.

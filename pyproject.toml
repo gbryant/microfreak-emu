@@ -1,0 +1,61 @@
+[project]
+name = "microfreak-emu"
+version = "0.0.0"
+description = "Renode rehosting harness and firmware documentation for the Arturia MicroFreak. Not affiliated with Arturia."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.11,<3.15"
+
+# The ceiling is inherited, not chosen here: microfreak-tools caps at
+# <3.15 because its MIDI backend (rtmidi2) has no cp315 wheel yet, and
+# this harness depends on that package. Raise both together.
+
+# A research harness, not a stable library: `mfemu` is importable so the tests
+# in tests/ can reach it without path games, but nothing in it is public API.
+dependencies = [
+    # The encoders, the preset TLV reader and the firmware patcher. The harness
+    # tests the same code the tool ships rather than keeping a second copy --
+    # that is the point of the split, and why a test here can catch a bug
+    # there.
+    "microfreak-tools",
+    # The analog filter model and the render comparisons. Renode is the
+    # harness and is NOT a Python package: install it separately (see README).
+    "numpy>=2.0",
+]
+
+# filter_cal/ records from the instrument to fit the filter model's curves.
+# Nobody needs it to use the emulator -- the fitted constants are already in
+# filter_model.py -- so its MIDI dependency is not a dependency of the repo.
+# rtmidi2, matching microfreak-tools: python-rtmidi stopped publishing wheels
+# at cp312 and has had no release since 2023-11-20.
+[project.optional-dependencies]
+hardware = ["rtmidi2>=1.5.0"]
+
+[project.scripts]
+mfemu = "mfemu.cli:main"
+
+# microfreak-tools is not on PyPI yet. Until it is, resolve it from a sibling
+# checkout -- so BOTH repositories must be cloned side by side, which README
+# says under "Running it". A lone clone of this repo cannot `uv sync`.
+# Delete this block once microfreak-tools publishes.
+[tool.uv.sources]
+microfreak-tools = { path = "../microfreak-tools", editable = true }
+mfreak-speech = { path = "../microfreak-tools/plugins/speech", editable = true }
+mfreak-peek = { path = "../microfreak-tools/plugins/peek", editable = true }
+
+# The speech plugin's encoders and patcher are tested here too, and in this
+# checkout `mfreak` has both first-party plugins.
+[dependency-groups]
+dev = ["mfreak-speech", "mfreak-peek"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mfemu"]
+
+# The Renode assets (renode/) and the firmware documentation (docs/) are not
+# packaged: they are read from the checkout, which is the only way this is
+# ever used. `paths.py` finds them by walking up from its own location.

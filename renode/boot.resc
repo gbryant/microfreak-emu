@@ -1,0 +1,42 @@
+:name: MicroFreak main board
+:description: Boot the MicroFreak main firmware and report whether it reaches main().
+
+# $mf and $fw are set by the caller -- mfrender.py and midilink.py both emit
+# them before including this file, computed from paths.py. They were absolute
+# paths into ~/Downloads until 2026-09-23, which made the repository unmovable.
+# To run this script by hand, set them first:
+#     $mf ?= @/path/to/microfreak-emu/renode
+#     $fw ?= @/path/to/your/data/firmware/.../payloads/main.raw
+$repl ?= $mf/microfreak.repl
+
+# The QUADSPI model has to be compiled before the platform that references it.
+include $mf/STM32F4_Flash.cs
+include $mf/STM32F4DMA.cs
+include $mf/STM32_QUADSPI.cs
+include $mf/MicroFreakCodec.cs
+include $mf/STM32_SAI.cs
+include $mf/STM32_OTGFS.cs
+
+mach create "microfreak"
+machine LoadPlatformDescription $repl
+include $mf/otg_fs_reset.resc
+
+# 0x0800C000, not 0x08000000 -- see the platform file.
+sysbus LoadBinary $fw 0x0800C000
+cpu VectorTableOffset 0x0800C000
+
+# Milestones. The addresses differ in every build, so the caller sets them
+# from the image's own reset handler (mfemu/startup.py); the defaults are
+# 5.0.0.2084's. Each one reports the instruction count AT the hook: reading
+# `cpu ExecutedInstructions` from the Monitor afterwards answers "how far has
+# it got by now", which is a much larger number, because the machine
+# free-runs while a test polls.
+$ms_systeminit ?= 0x0802EDAC
+$ms_libc ?= 0x08061420
+$ms_main ?= 0x0802479C
+cpu AddHook $ms_systeminit "self.Log(LogLevel.Error, 'MILESTONE SystemInit insns={}'.format(self.ExecutedInstructions))"
+cpu AddHook $ms_libc "self.Log(LogLevel.Error, 'MILESTONE __libc_init_array insns={}'.format(self.ExecutedInstructions))"
+cpu AddHook $ms_main "self.Log(LogLevel.Error, 'MILESTONE main() insns={}'.format(self.ExecutedInstructions))"
+
+logLevel 3 sysbus
+logLevel 3 flash_controller
